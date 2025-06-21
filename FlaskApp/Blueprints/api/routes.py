@@ -64,8 +64,19 @@ def cargar_video_youtube():
     
     #print("Idioma: ", idioma)
     print("Cargando video de youtube...")
-    loader = YoutubeLoader.from_youtube_url(url, add_video_info=False, language=["es", "en"])
+    cookies_path = os.path.join(os.path.dirname(__file__), './Cookies antibot YT/www.youtube.com_cookies.txt')
+
+    loader = YoutubeLoader.from_youtube_url(
+    url,
+    add_video_info=False,
+    language=["es", "en"],
+    download_captions=True,
+    cookies=cookies_path)
+    
+
+
     transcripcion = loader.load()
+
     print("Transcripción cargada")
     titulo = get_video_title(url)
     print("Titulo del video: ", titulo)
