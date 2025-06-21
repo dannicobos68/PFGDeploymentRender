@@ -1,5 +1,5 @@
 import yt_dlp
-from langchain_community.document_loaders.youtube import YoutubeLoader
+from langchain.document_loaders import UnstructuredVTTLoader
 from langchain_community.llms import OpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -17,18 +17,17 @@ import openai
 import json
 from datetime import datetime
 import os
+import requests
+from langchain_core.documents import Document
 
 
 def get_video_title(url):
-    # Ruta al archivo cookies.txt en entorno Render
     cookies_path = "/etc/secrets/cookies1"
-
     ydl_opts = {
         'quiet': True,
         'cookiefile': cookies_path,
         'noplaylist': True,
     }
-
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -38,7 +37,6 @@ def get_video_title(url):
         return "No se pudo obtener el título del video"
 
 
-# Función para generar embeddings desde texto
 def get_text_embedding(text):
     embedding = client.embeddings.create(input=text, model="text-embedding-3-small").data[0].embedding
     return embedding
@@ -50,48 +48,54 @@ def cargar_video_youtube():
     url = datos['url']
     id_user = current_user.id
 
-    print("URL: ", url)
-    print("id_user", id_user)
-
     videos = Videos.query.filter_by(idUsuario=id_user).all()
     for video in videos:
         if video.url == url:
             return {"error": "El video ya ha sido cargado"}
 
-    print("Cargando video de youtube...")
-
-    # Ruta al archivo de cookies en Render
     cookies_path = "/etc/secrets/cookies1"
     if not os.path.exists(cookies_path):
-        print(f"[ERROR] El archivo de cookies no existe: {cookies_path}")
         return {"error": "Archivo de cookies no encontrado"}
 
-    loader = YoutubeLoader.from_youtube_url(
-        url,
-        add_video_info=False,
-        language=["es", "en"],
-        cookies=cookies_path
-    )
+    ydl_opts = {
+        'quiet': True,
+        'cookiefile': cookies_path,
+        'noplaylist': True,
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitlesformat': 'vtt',
+        'subtitleslangs': ['es', 'en'],
+    }
 
-    transcripcion = loader.load()
-    print("Transcripción cargada")
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            title = info.get('title', 'Título no encontrado')
+            subtitles = info.get('subtitles') or info.get('automatic_captions')
+            if not subtitles:
+                return {"error": "No se encontraron subtítulos"}
 
-    titulo = get_video_title(url)
-    print("Titulo del video: ", titulo)
+            lang = 'es' if 'es' in subtitles else 'en'
+            vtt_url = subtitles[lang][0]['url']
 
-    video = Videos(titulo=titulo, url=url, idUsuario=id_user)
+            vtt_content = requests.get(vtt_url).text
+            with open("/tmp/tmp_subs.vtt", "w", encoding="utf-8") as f:
+                f.write(vtt_content)
+
+            loader = UnstructuredVTTLoader("/tmp/tmp_subs.vtt")
+            documents = loader.load()
+            text = documents[0].page_content
+
+    except Exception as e:
+        return {"error": "No se pudo cargar el video"}
+
+    video = Videos(titulo=title, url=url, idUsuario=id_user)
     db.session.add(video)
     db.session.flush()
     id_video = video.id
-    print("ID del video: ", id_video)
 
-    if not transcripcion:
-        return {"error": "No se pudo obtener la transcripción del video"}
-
-    texto = transcripcion[0].page_content
-    datafrme = cargar_texto(500, texto , id_user, id_video)
-    print("DATAFRAME", datafrme)
-
+    resultado = cargar_texto(500, text, id_user, id_video)
     return {"idVideo": id_video}
 
 
@@ -116,13 +120,10 @@ def generar_respuesta(pregunta, texto):
 
 def buscar(pregunta, embeddings, idVideo):
     pregunta_embedding = get_text_embedding(pregunta)
-    similitud = [calculate_cosine_similarity(emb, pregunta_embedding) for emb in embeddings]
-    max_similitud = np.argmax(similitud)
+    similitud = [calculate_cosine_similarity(embedding, pregunta_embedding) for embedding in embeddings]
     indices = np.argsort(similitud)[::-1]
-
     primer_id = obtener_id_transaccion(idVideo)
     fila = obtener_fila(idVideo, primer_id + int(indices[0]))
-
     respuesta = generar_respuesta(pregunta, fila.texto)
     return respuesta
 
@@ -141,7 +142,6 @@ def realizar_pregunta():
     llamada = Llamada(idUsuario=id_usuario, idVideo=idVideo, pregunta=pregunta, respuesta=respuesta, fecha=datetime.now())
     db.session.add(llamada)
     db.session.commit()
-
     return {"respuesta": respuesta}
 
 
@@ -155,8 +155,10 @@ def split_text(content, chunk_size):
     while start < len(content):
         end = start + chunk_size
         if end < len(content):
-            while content[end] != "." and end < len(content) - 1:
+            while end < len(content) and content[end] != ".":
                 end += 1
+                if end == len(content):
+                    break
         chunk = content[start:end+1]
         chunks.append(chunk)
         start = end + 1
@@ -165,15 +167,10 @@ def split_text(content, chunk_size):
 
 def cargar_texto(chunk_size, contenido_video, id_user, idVideo):
     textos = split_text(contenido_video, chunk_size)
-
-    print("Empezando a generar embeddings...")
     for i, texto in enumerate(textos):
-        print("Generando embeddings para el texto: ", i)
         embedding = get_text_embedding(texto)
-        embedding = str(embedding)
-        info_linea = InfoVideo(texto=texto, embedding=embedding, idUsuario=id_user, idVideo=idVideo)
+        info_linea = InfoVideo(texto=texto, embedding=str(embedding), idUsuario=id_user, idVideo=idVideo)
         db.session.add(info_linea)
-
     db.session.commit()
     time.sleep(1)
     return "Embeddings generados"
@@ -183,3 +180,4 @@ def generar_embeddings(texto):
     summarizer = load_summarize_chain()
     embeddings = summarizer.get_embeddings(texto)
     return embeddings
+
