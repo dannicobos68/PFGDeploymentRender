@@ -64,19 +64,8 @@ def cargar_video_youtube():
     
     #print("Idioma: ", idioma)
     print("Cargando video de youtube...")
-    cookies_path = os.path.join(os.path.dirname(__file__), './Cookies antibot YT/www.youtube.com_cookies.txt')
-
-    loader = YoutubeLoader.from_youtube_url(
-    url,
-    add_video_info=False,
-    language=["es", "en"],
-    download_captions=True,
-    cookies=cookies_path)
-    
-
-
+    loader = YoutubeLoader.from_youtube_url(url, add_video_info=False, language=["es", "en"])
     transcripcion = loader.load()
-
     print("Transcripción cargada")
     titulo = get_video_title(url)
     print("Titulo del video: ", titulo)
@@ -232,8 +221,3 @@ def generar_embeddings(texto):
     summarizer = load_summarize_chain()
     embeddings = summarizer.get_embeddings(texto)
     return embeddings
-
-
-
-
-# Funcion para cargar un video local
