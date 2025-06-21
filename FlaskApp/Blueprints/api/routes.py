@@ -16,13 +16,28 @@ from sklearn.metrics.pairwise import cosine_similarity
 import openai
 import json
 from datetime import datetime
+import os
+
 
 
 def get_video_title(url):
-    ydl_opts = {"quiet": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get("title", "Título no encontrado")
+    # Ruta al archivo cookies.txt, ajusta según tu estructura de carpetas
+    cookies_path = os.path.join(os.path.dirname(__file__), './Cookies antibot YT/www.youtube.com_cookies.txt')
+
+    ydl_opts = {
+        'quiet': True,
+        'cookiefile': cookies_path,
+        'noplaylist': True,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return info.get("title", "Título no encontrado")
+    except Exception as e:
+        print(f"[ERROR] No se pudo obtener el título del video: {e}")
+        return "No se pudo obtener el título del video"
+
     
     
 # Funcion para cargar un video de youtube
