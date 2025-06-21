@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block ventas %}
+    <!-- ============================================================== -->
+    <!-- Preloader - style you can find in spinners.css -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <div class="lds-ripple">
+            <div class="lds-pos"></div>
+            <div class="lds-pos"></div>
+        </div>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Main wrapper - style you can find in pages.scss -->
+    <!-- ============================================================== -->
+    <div id="main-wrapper" data-navbarbg="skin6" data-theme="light" data-layout="vertical" data-sidebartype="full"
+        data-boxed-layout="full">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <header class="topbar" data-navbarbg="skin6">
+            <nav class="navbar top-navbar navbar-expand-md navbar-light">
+                <div class="navbar-header" data-logobg="skin5">
+                    <!-- This is for the sidebar toggle which is visible on mobile only -->
+                    <a class="nav-toggler waves-effect waves-light d-block d-md-none" href="javascript:void(0)">
+                        <i class="ti-menu ti-close"></i>
+                    </a>
+                    <!-- ============================================================== -->
+                    <!-- Logo -->
+                    <!-- ============================================================== -->
+                    <div class="navbar-brand">
+                        <a href="{{url_for('main.index')}}" class="logo">
+                            <!-- Logo icon -->
+                            <b class="logo-icon">
+                                <!-- Dark Logo icon -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-icon.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo icon -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-light-icon.png') }}" alt="homepage" class="light-logo" />
+                            </b>
+                            <!--End Logo icon -->
+                            <!-- Logo text -->
+                            <span class="logo-text">
+                                <!-- dark Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-text.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-light-text.png') }}" class="light-logo" alt="homepage" />
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        <!-- ============================================================== -->
+        <!-- End Topbar header -->
+        <!-- ============================================================== -->
+
+
+        <!-- ============================================================== -->
+        <!-- Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        {% include 'includes/sidebar.html' %}
+        <!-- ============================================================== -->
+        <!-- End Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Page wrapper  -->
+        <!-- ============================================================== -->
+        <div class="page-wrapper">
+            <!-- ============================================================== -->
+            <!-- Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <div class="page-breadcrumb">
+                <div class="row">
+                    <div class="col-5 align-self-center">
+                        <h4 class="page-title">Dashboard</h4>
+                    </div>
+                    <div class="col-7 align-self-center">
+                        <div class="d-flex align-items-center justify-content-end">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb">
+                                    <li class="breadcrumb-item">
+                                        <a href="{{ url_for('main.actualizar_datos_historicos') }}">Actualizar Datos</a>
+                                    </li>
+                                </ol>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <!-- ============================================================== -->
+            <!-- Container fluid  -->
+            <!-- ============================================================== -->
+            <div class="container-fluid">
+                <!-- ============================================================== -->
+                <!-- Email campaign chart -->
+                <!-- ============================================================== -->
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-0">Patrimonio</h4>
+                                <h2 class="font-light">{{patrimonio}} €<span class="font-16 text-success font-medium"></span>
+                                </h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title mb-0">Presupuesto</h4>
+                                <h2 class="font-light">{{presupuesto}} €<span class="font-16 text-success font-medium"></span>
+                                </h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- ============================================================== -->
+                <!-- Email campaign chart -->
+                <!-- ============================================================== -->
+                <!-- ============================================================== -->
+                <!-- Ravenue - page-view-bounce rate -->
+                <!-- ============================================================== -->
+                <div class="row">
+                    <!-- column -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title">Jugadores: {{ num_jugadores }}/24</h4>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="grid">
+                                    <thead>
+                                        <tr>
+                                            <th class="border-top-0 sortable" data-column="Nombre" data-type="string"><a href="{{url_for('main.order_ventas', orden="nombre")}}">NOMBRE</a></th>
+                                            <th class="border-top-0 sortable" data-column="Posicion" data-type="string"><a href="{{url_for('main.order_ventas', orden="posicion")}}">POSICION</a></th>
+                                            <th class="border-top-0 sortable" data-column="Alineado" data-type="string"><a href="{{url_for('main.order_ventas', orden="puntos")}}">PUNTOS</a></th>
+                                            <th class="border-top-0 sortable" data-column="Precio" data-type="string"><a href="{{url_for('main.order_ventas', orden="precio_compra")}}">PRECIO DE COMPRA</a></th>
+                                            <th class="border-top-0 sortable" data-column="Puntos" data-type="number"><a href="{{url_for('main.order_ventas', orden="precio")}}">PRECIO ACTUAL</a></th>
+                                            <th class="border-top-0 sortable" data-column="Media_Puntos" data-type="number"><a href="{{url_for('main.order_ventas', orden="ganancia")}}">GANANCIA/PERDIDA</a></th>
+                                            <th class="border-top-0 sortable" data-column="Media_Puntos" data-type="number"><a href="{{url_for('main.order_ventas', orden="alineado")}}">ALINEADO</a></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for jugador in jugadores %}
+                                        <tr>
+                                            <td class="txt-oflo">{{ jugador[0] }}</td>
+                                            <td><span class="label label-success label-rounded">{{ jugador[1] }}</span> </td>
+                                            <td class="txt-oflo">{{ jugador[2] }}</td>
+                                            <td><span class="font-medium">{{ jugador[4] }} €</span></td>
+                                            <td><span class="font-medium">{{ jugador[3] }} €</span></td>
+                                            <td><span class="font-medium" style="color:{{ jugador[7] }};">{{ jugador[5] }} -> {{ jugador[8] }}% </span></td>
+                                            <td><span class="font-medium">{{ jugador[6] }}</span></td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- ============================================================== -->
+                <!-- Ravenue - page-view-bounce rate -->
+                <!-- ============================================================== -->
+                <!-- ============================================================== -->
+                <!-- Recent comment and chats -->
+                <!-- ============================================================== -->
+                
+                <!-- ============================================================== -->
+                <!-- Recent comment and chats -->
+                <!-- ============================================================== -->
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Container fluid  -->
+            <!-- ============================================================== -->
+        </div>
+        <!-- ============================================================== -->
+        <!-- End Page wrapper  -->
+        <!-- ============================================================== -->
+    </div>
+    <!-- ============================================================== -->
+    <!-- End Wrapper -->
+    <!-- ============================================================== -->
+    <!-- ============================================================== -->
+    <!-- All Jquery -->
+    <!-- ============================================================== -->
+    {% include 'includes/scripts.html' %}
+{% endblock ventas %}

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block main %}
+<link href="{{ url_for('static', filename='css/preguntas.css') }}" rel="stylesheet">
+    <!-- ============================================================== -->
+    <!-- Preloader - style you can find in spinners.css -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <div class="lds-ripple">
+            <div class="lds-pos"></div>
+            <div class="lds-pos"></div>
+        </div>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Main wrapper - style you can find in pages.scss -->
+    <!-- ============================================================== -->
+    <div id="main-wrapper" data-navbarbg="skin6" data-theme="light" data-layout="vertical" data-sidebartype="full"
+        data-boxed-layout="full">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <header class="topbar" data-navbarbg="skin6">
+            <nav class="navbar top-navbar navbar-expand-md navbar-light">
+                <div class="navbar-header" data-logobg="skin5">
+                    <!-- This is for the sidebar toggle which is visible on mobile only -->
+                    <a class="nav-toggler waves-effect waves-light d-block d-md-none" href="javascript:void(0)">
+                        <i class="ti-menu ti-close"></i>
+                    </a>
+                    <!-- ============================================================== -->
+                    <!-- Logo -->
+                    <!-- ============================================================== -->
+                    <div class="navbar-brand">
+                        <a href="{{url_for('bp_main.index')}}" class="logo">
+                            <!-- Logo icon -->
+                            <b class="logo-icon">
+                                <!-- Dark Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="light-logo" />
+                            </b>
+                            <!--End Logo icon -->
+                            <!-- Logo text -->
+                            <span class="logo-text">
+                                <!-- dark Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-text.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-light-text.png') }}" class="light-logo" alt="homepage" />
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        <!-- ============================================================== -->
+        <!-- End Topbar header -->
+        <!-- ============================================================== -->
+
+
+        <!-- ============================================================== -->
+        <!-- Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        {% include 'includes/sidebar.html' %}
+        <!-- ============================================================== -->
+        <!-- End Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Page wrapper  -->
+        <!-- ============================================================== -->
+        <div class="page-wrapper">
+            <!-- ============================================================== -->
+            <!-- Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <div class="page-breadcrumb">
+                <div class="row">
+                    
+                    <div class="col-7 align-self-center">
+                        <div class="d-flex align-items-center justify-content-end">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb">
+                                    
+                                </ol>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <!-- ============================================================== -->
+            <!-- Container fluid  -->
+            <!-- ============================================================== -->
+            <div class="container-fluid">
+                <div class="row">
+                    <!-- column -->
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4 class="card-title">Historial de videos guardados:</h4>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="grid">
+                                    <thead>
+                                        <tr>
+                                            <th class="border-top-0 sortable"><a href="#">TITULO</a></th>
+                                            <th class="border-top-0 sortable"><a href="#">URL</a></th>
+                                            <th class="border-top-0 sortable"><a href="#">RATING</a></th>
+                                            <th class="border-top-0 sortable"><a href="#">IR AL VIDEO</a></th>
+                    
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for video in videos %}      
+                                        <tr>
+                                            <td class="txt-oflo"> {{video.titulo}} </td>
+                                            <td class="txt-oflo"> {{video.url}} </td>
+                                            <td>
+                                                <form id="ratingForm" method="POST" action="/rating">
+                                                    <input type="hidden" name="video_id" value="{{video.id}}">
+                                                    <input type="number" name="rating" min="1" max="5" step="1" required value={{video.rating}}>
+                                                    <button type="submit">Calificar</button>
+                                                </form>                                                
+                                            </td>
+                                            <td class="txt-oflo"> <a href="{{url_for('bp_main.chatVideo', video_id=video.id)}}">Ir a la sección de preguntas</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Container fluid  -->
+            <!-- ============================================================== -->
+        </div>
+        <!-- ============================================================== -->
+        <!-- End Page wrapper  -->
+        <!-- ============================================================== -->
+    </div>
+    <!-- ============================================================== -->
+    <!-- End Wrapper -->
+    <!-- ============================================================== -->
+    <script>
+
+        let sendButton = document.getElementById("send-button")
+        console.log(sendButton)
+        sendButton.addEventListener("click", async (event) => {
+            let url = document.getElementById("url").value;
+            const message = {
+                url: url,
+                id_user: "{{id_user}}"
+            };
+            console.log("MENSAJE", message);
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('br1').style.display = 'block';
+            document.getElementById('br2').style.display = 'block';
+            document.getElementById('br3').style.display = 'block';
+            document.getElementById('br4').style.display = 'block';
+            
+            preguntaInput.value = '';
+            // Insertar mensaje en el chat
+        
+            const response = await fetch('{{url_for("bp_api.cargar_video_youtube")}}', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(message),
+            });
+            console.log("RESPONSE", response);
+            if (response.ok) {
+                const data = await response.json();
+                console.log("DATA", data);
+                url_respuesta = data.url;
+                url.value = '';
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('preguntas-container').style.display = 'block';
+            }
+        });
+
+        let preguntaInput = document.getElementById("preguntaInput");
+        let respuesta = document.getElementById("respuesta");
+        let sendButtonPregunta = document.getElementById("btn-pregunta");
+
+        sendButtonPregunta.addEventListener("click", async (event) => {
+            let pregunta = preguntaInput.value;
+            const message = {
+                pregunta: pregunta,
+                url: url_respuesta
+            };
+            console.log("MENSAJE", message);
+            const response = await fetch('{{url_for("bp_api.realizar_pregunta")}}', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(message),
+            });
+            console.log("RESPONSE", response);
+            if (response.ok) {
+                const data = await response.json();
+                console.log("DATA", data);
+                
+                
+                const responseText = data.respuesta;
+                console.log("RESPONSE TEXT", responseText);
+                // Crear un parrafo con la respuesta y meterlo dentro del div
+                const p = document.createElement("p");
+                p.textContent = responseText;
+                respuesta.appendChild(p);
+
+                // Limpiar el input
+                preguntaInput.value = '';
+            }
+        });
+
+
+    </script>
+
+    {% include 'includes/scripts.html' %}
+{% endblock main %}

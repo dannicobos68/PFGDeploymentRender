@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block main %}
+<link href="{{ url_for('static', filename='css/preguntas.css') }}" rel="stylesheet">
+    <!-- ============================================================== -->
+    <!-- Preloader - style you can find in spinners.css -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <div class="lds-ripple">
+            <div class="lds-pos"></div>
+            <div class="lds-pos"></div>
+        </div>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Main wrapper - style you can find in pages.scss -->
+    <!-- ============================================================== -->
+    <div id="main-wrapper" data-navbarbg="skin6" data-theme="light" data-layout="vertical" data-sidebartype="full"
+        data-boxed-layout="full">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <header class="topbar" data-navbarbg="skin6">
+            <nav class="navbar top-navbar navbar-expand-md navbar-light">
+                <div class="navbar-header" data-logobg="skin5">
+                    <!-- This is for the sidebar toggle which is visible on mobile only -->
+                    <a class="nav-toggler waves-effect waves-light d-block d-md-none" href="javascript:void(0)">
+                        <i class="ti-menu ti-close"></i>
+                    </a>
+                    <!-- ============================================================== -->
+                    <!-- Logo -->
+                    <!-- ============================================================== -->
+                    <div class="navbar-brand">
+                        <a href="{{url_for('bp_main.index')}}" class="logo">
+                            <!-- Logo icon -->
+                            <b class="logo-icon">
+                                <!-- Dark Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="light-logo" />
+                            </b>
+                            <!--End Logo icon -->
+                            <!-- Logo text -->
+                            
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        <!-- ============================================================== -->
+        <!-- End Topbar header -->
+        <!-- ============================================================== -->
+
+
+        <!-- ============================================================== -->
+        <!-- Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        {% include 'includes/sidebar.html' %}
+        <!-- ============================================================== -->
+        <!-- End Left Sidebar - style you can find in sidebar.scss  -->
+        <!-- ============================================================== -->
+        <!-- ============================================================== -->
+        <!-- Page wrapper  -->
+        <!-- ============================================================== -->
+        <div class="page-wrapper">
+            <!-- ============================================================== -->
+            <!-- Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <div class="page-breadcrumb">
+                <div class="row">
+                    
+                    <div class="col-7 align-self-center">
+                        <div class="d-flex align-items-center justify-content-end">
+                            <nav aria-label="breadcrumb">
+                                <ol class="breadcrumb">
+                                    
+                                </ol>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Bread crumb and right sidebar toggle -->
+            <!-- ============================================================== -->
+            <!-- ============================================================== -->
+            <!-- Container fluid  -->
+            <!-- ============================================================== -->
+            <div class="container-fluid">
+                <!-- ============================================================== -->
+                <!-- Email campaign chart -->
+                <!-- ============================================================== -->
+                <div id="contenedor">
+                    <h1>Descubre información de videos de Youtube con IA</h1>
+                    <div id="video-container">
+                        <input type="text" id="url" placeholder="Introduce la URL del video de Youtube" class="form-control form-control-lg">
+                        <button class="btn btn-preguntar" id="send-button">Enviar</button>
+                    <br id="br1" style="display:none;">
+                    <br id="br2" style="display:none;">
+                    <div class="loader" id="loader" style="display:none;"></div>
+                    <br id="br3" style="display:none;">
+                    <br id="br4" style="display:none;">
+                    <a href="#"class="btn btn-preguntar" id="btn-pregunta" style="display:none;">Ir a hacerle pregutnas</button>
+                </div>
+            </div>
+            <!-- ============================================================== -->
+            <!-- End Container fluid  -->
+            <!-- ============================================================== -->
+        </div>
+        <!-- ============================================================== -->
+        <!-- End Page wrapper  -->
+        <!-- ============================================================== -->
+    </div>
+    <!-- ============================================================== -->
+    <!-- End Wrapper -->
+    <!-- ============================================================== -->
+    <script>
+
+        let sendButton = document.getElementById("send-button")
+        console.log(sendButton)
+        sendButton.addEventListener("click", async (event) => {
+            let url = document.getElementById("url").value;
+            const message = {
+                url: url,
+                id_user: "{{id_user}}"
+            };
+            console.log("MENSAJE", message);
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('br1').style.display = 'block';
+            document.getElementById('br2').style.display = 'block';
+            document.getElementById('br3').style.display = 'block';
+            document.getElementById('br4').style.display = 'block';
+            
+    
+            const response = await fetch('{{url_for("bp_api.cargar_video_youtube")}}', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(message),
+            });
+            console.log("RESPONSE", response);
+            idVideo = '';
+            if (response.ok) {
+                const data = await response.json();
+                console.log("DATA", data);
+                idVideo = data.idVideo;
+                console.log("ID VIDEO", idVideo);
+                url_respuesta = data.url;
+                url.value = '';
+                document.getElementById('loader').style.display = 'none';
+                let btnPregunta = document.getElementById("btn-pregunta");
+                btnPregunta.style.display = 'block';
+                // añadir en el enlace el id del video que se devuelve en la respuesta
+                btnPregunta.href = "/chatVideo/" + idVideo;
+            }
+        });
+    </script>
+
+    {% include 'includes/scripts.html' %}
+{% endblock main %}

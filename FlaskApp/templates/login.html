@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block login %}
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/util.css') }}">
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/main.css') }}">
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/login.css') }}">
+<div class="limiter">
+    <div class="container-login100" style="background-image: url('{{ url_for('static', filename='images/1.jpg') }}');")>
+        <div class="wrap-login100">
+            <form class="login100-form" action="" method="POST" id="loginForm" novalidate>
+                {{ form_login.hidden_tag() }}                
+                <span class="login100-form-logo">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" class="logo">
+                </span>
+                <span class="login100-form-title p-b-5 p-t-27">
+                    DanAI
+                </span>
+                <span class="login100-form-subtitle p-b-40 p-t-5">
+                    Hago el estudio más fácil
+                </span>
+                <div class="wrap-input100 validate-input" data-validate="Enter username">
+                    {{form_login.username }}
+                </div>
+                {% for error in form_login.username.errors %}
+                    <span style="color: red;">{{ error }}</span>
+                    {% endfor %}
+                <div class="wrap-input100 validate-input" data-validate="Enter password">
+                    {{form_login.password }}
+                </div>
+                {% for error in form_login.password.errors %}
+                    <span style="color: red;">{{ error }}</span>
+                    {% endfor %}
+                <div class="container-login100-form-btn">
+                    {{form_login.submit(class="login100-form-btn")}}
+                </div>
+                <div class="text-center p-t-30">
+                    <a class="txt1" href={{url_for('bp_users.register')}} id="showSignUp">Solicitud de registro</a>
+                </div>
+                {% if error %}
+                <div class="alert alert-danger" role="alert">
+                    {{ error }}
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock login %}

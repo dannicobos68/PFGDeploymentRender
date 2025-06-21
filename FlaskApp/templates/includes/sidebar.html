@@ -1,0 +1,29 @@
+<aside class="left-sidebar" data-sidebarbg="skin5">
+    <!-- Sidebar scroll-->
+    <div class="scroll-sidebar">
+        <!-- Sidebar navigation-->
+        <nav class="sidebar-nav">
+            <ul id="sidebarnav">
+                <li class="sidebar-item">
+                    <a class="sidebar-link waves-effect waves-dark sidebar-link" href="{{url_for('bp_main.index')}}"
+                        aria-expanded="false">
+                        <i class="mdi mdi-av-timer"></i>
+                        <span class="hide-menu">Introducir vídeos</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a class="sidebar-link waves-effect waves-dark sidebar-link" href="{{url_for('bp_main.historial')}}"
+                        aria-expanded="false">
+                        <i class="mdi mdi-account-network"></i>
+                        <span class="hide-menu">Historial</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <!-- End Sidebar navigation -->
+        <div class="text-center mt-3" style="position: absolute; bottom: 0; width: 100%;">
+            <a href="{{url_for('bp_main.logout')}}" class="btn btn-danger">Cerrar sesión</a>
+        </div>
+    </div>
+    <!-- End Sidebar scroll-->
+</aside>

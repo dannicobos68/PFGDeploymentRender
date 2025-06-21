@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block main %}
+<link href="{{ url_for('static', filename='css/chat.css') }}" rel="stylesheet">
+    <!-- ============================================================== -->
+    <!-- Preloader - style you can find in spinners.css -->
+    <!-- ============================================================== -->
+    <div class="preloader">
+        <div class="lds-ripple">
+            <div class="lds-pos"></div>
+            <div class="lds-pos"></div>
+        </div>
+    </div>
+    <!-- ============================================================== -->
+    <!-- Main wrapper - style you can find in pages.scss -->
+    <!-- ============================================================== -->
+    <div id="main-wrapper" data-navbarbg="skin6" data-theme="light" data-layout="vertical" data-sidebartype="full"
+        data-boxed-layout="full">
+        <!-- ============================================================== -->
+        <!-- Topbar header - style you can find in pages.scss -->
+        <!-- ============================================================== -->
+        <header class="topbar" data-navbarbg="skin6">
+            <nav class="navbar top-navbar navbar-expand-md navbar-light">
+                <div class="navbar-header" data-logobg="skin5">
+                    <!-- This is for the sidebar toggle which is visible on mobile only -->
+                    <a class="nav-toggler waves-effect waves-light d-block d-md-none" href="javascript:void(0)">
+                        <i class="ti-menu ti-close"></i>
+                    </a>
+                    <!-- ============================================================== -->
+                    <!-- Logo -->
+                    <!-- ============================================================== -->
+                    <div class="navbar-brand">
+                        <a href="{{url_for('bp_main.index')}}" class="logo">
+                            <!-- Logo icon -->
+                            <b class="logo-icon">
+                                <!-- Dark Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo icon -->
+                                <img src="{{ url_for('static', filename='images/logo - copia.png') }}" alt="homepage" class="light-logo" />
+                            </b>
+                            <!--End Logo icon -->
+                            <!-- Logo text -->
+                            <span class="logo-text">
+                                <!-- dark Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-text.png') }}" alt="homepage" class="dark-logo" />
+                                <!-- Light Logo text -->
+                                <img src="{{ url_for('static', filename='assets/images/logo-light-text.png') }}" class="light-logo" alt="homepage" />
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        {% include 'includes/sidebar.html' %}
+        <div class="page-wrapper">
+            <div class="chat-container" id="chat-container" >
+                    <!-- Ejemplo de mensajes -->
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="bot-message">Hola, en que puedo ayudarte?</div>   
+                        {% for hist in historial %}
+                        <div class="user-message">{{hist.pregunta}}</div>
+                        <div class="bot-message">{{hist.respuesta}}</div>
+                    {% endfor %}                     
+                    </div>
+                    
+                    <div class="dot-spinner" id="loader">
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                        <div class="dot-spinner__dot"></div>
+                    </div>
+                    <!-- Entrada de usuario -->
+                    <div class="chat-input">
+                        <input type="text" class="user-input" placeholder="Escribe tu mensaje..." id="messageInput">
+                        <button class="send-button" id="send-button">Enviar</button>
+                    </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function scrollToBottom() {
+            var chatContainer = document.getElementById('chat-container');
+            console.log(chatContainer);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    
+        // Llama a la función para que se ejecute cuando la página haya cargado completamente
+        window.onload = function() {
+            scrollToBottom();
+        };
+
+        let sendButton = document.getElementById("send-button");
+        let messageInput = document.getElementById("messageInput");
+
+        sendButton.addEventListener("click", async (event) => {
+            let pregunta = messageInput.value;
+
+            let botMessage = document.createElement("div");
+            botMessage.classList.add("user-message");
+            botMessage.textContent = pregunta;
+            document.getElementById("chat-messages").appendChild(botMessage);
+            messageInput.value = "";
+            scrollToBottom();
+
+            const message = {
+                pregunta: pregunta,
+                idVideo: {{idVideo}}
+            };
+            console.log("MENSAJE", message);
+            const response = await fetch("{{url_for('bp_api.realizar_pregunta')}}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(message),
+            });
+
+            if (response.ok) {
+                const responseData = await response.json();
+                console.log("RESPONSE", responseData);
+
+                const responseText = responseData.respuesta;
+
+                const chatMessages = document.getElementById("chat-messages");
+
+                const botMessageContainer = document.createElement('div');
+                botMessageContainer.className = 'bot-message';
+                const botMessageText = document.createElement('p');
+                botMessageText.textContent = responseText;
+
+                botMessageContainer.appendChild(botMessageText);
+                chatMessages.appendChild(botMessageContainer);
+
+                scrollToBottom();
+            }    
+        });
+    </script>
+    {% include 'includes/scripts.html' %}
+{% endblock main %}
