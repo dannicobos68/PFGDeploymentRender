@@ -108,5 +108,5 @@ wrapt==2.0.1
 WTForms==3.1.2
 yarl==1.9.4
 youtube-transcript-api==0.6.0
-yt-dlp==2025.11.12
+yt-dlp==2024.12.30
 zstandard==0.25.0
