@@ -69,20 +69,42 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     except Exception:
         print("No hay subtítulos oficiales, usando Whisper...")
 
-    # Transcribir audio con streaming a Whisper
-    try:
-        command = ["yt-dlp", "-f", "bestaudio", "-o", "-", url]
-        process = subprocess.Popen(command, stdout=subprocess.PIPE)
-        from openai import OpenAI
-        client_openai = OpenAI()
-        transcription = client_openai.audio.transcriptions.create(
-            file=process.stdout,
-            model="whisper-1"
-        )
-        return transcription.text
-    except Exception as e:
-        print("Error al transcribir audio con Whisper:", e)
-        return None
+    # Descargar audio con yt-dlp usando cookies automáticas
+    with tempfile.TemporaryDirectory() as tmpdir:
+        audio_path = os.path.join(tmpdir, "audio.mp3")
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": audio_path,
+            "quiet": True,
+            "cookies_from_browser": "auto",  # <-- cookies detectadas automáticamente
+            "proxy": WEBPROXY,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        except Exception as e:
+            print("Error al descargar audio con cookies del navegador:", e)
+            return None
+
+        # Convertir a mp3 si fuera necesario
+        if not audio_path.endswith(".mp3"):
+            audio_mp3 = audio_path.replace(".webm", ".mp3")
+            subprocess.run(["ffmpeg", "-i", audio_path, audio_mp3], check=True)
+            audio_path = audio_mp3
+
+        # Transcribir con Whisper
+        try:
+            from openai import OpenAI
+            client_openai = OpenAI()
+            with open(audio_path, "rb") as f:
+                transcription = client_openai.audio.transcriptions.create(
+                    file=f,
+                    model="whisper-1"
+                )
+            return transcription.text
+        except Exception as e:
+            print("Error al transcribir audio con Whisper:", e)
+            return None
 
 # --------------------
 # Función para cargar un video
@@ -180,24 +202,6 @@ def realizar_pregunta():
 
     videos_json = InfoVideo.query.with_entities(InfoVideo.embedding).filter(
         InfoVideo.idUsuario == id_usuario,
-        InfoVideo.idVideo == idVideo
-    ).all()
 
-    embeddings = [json.loads(v.embedding) for v in videos_json]
-
-    respuesta = buscar(pregunta, embeddings, idVideo)
-
-    # Guardar la pregunta y respuesta
-    llamada = Llamada(
-        idUsuario=id_usuario,
-        idVideo=idVideo,
-        pregunta=pregunta,
-        respuesta=respuesta,
-        fecha=datetime.now()
-    )
-    db.session.add(llamada)
-    db.session.commit()
-
-    return {"respuesta": respuesta}
 
 
