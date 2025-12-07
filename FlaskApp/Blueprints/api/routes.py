@@ -50,7 +50,7 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción con subtítulos o Whisper usando proxy + cookies
+# Obtener transcripción con subtítulos o Whisper usando solo proxy
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     # Extraer video ID
@@ -69,18 +69,15 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     except Exception:
         print("No hay subtítulos oficiales, usando Whisper...")
 
-    # Transcribir audio con yt-dlp + proxy + cookies automáticas desde navegador
+    # Transcribir audio con yt-dlp + proxy
     try:
-        # Crear archivo temporal para guardar audio
         with tempfile.TemporaryDirectory() as tmpdir:
             audio_path = os.path.join(tmpdir, "audio.mp3")
-
             ydl_opts = {
                 "format": "bestaudio/best",
                 "outtmpl": audio_path,
                 "quiet": True,
                 "proxy": WEBPROXY,
-                "cookies_from_browser": ("chrome",),  # Extrae cookies automáticamente de Chrome (funciona también con Edge)
                 "extractor_args": {"youtube": {"player_client": "default"}}
             }
 
@@ -221,8 +218,3 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
-
-
-
-
-
