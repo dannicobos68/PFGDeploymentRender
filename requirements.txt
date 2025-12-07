@@ -78,4 +78,4 @@ yarl
 youtube-transcript-api
 yt-dlp
 zstandard
-
+PyJWT
