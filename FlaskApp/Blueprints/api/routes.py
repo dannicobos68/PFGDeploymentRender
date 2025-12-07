@@ -2,9 +2,9 @@ import os
 import re
 import json
 import time
-import requests
 import tempfile
 import numpy as np
+import requests
 from flask import request
 from flask_login import current_user, login_required
 from sklearn.metrics.pairwise import cosine_similarity
@@ -12,6 +12,9 @@ from datetime import datetime
 from FlaskApp.core import client
 from FlaskApp.database import db, InfoVideo, Videos, Llamada
 from openai import OpenAI
+import yt_dlp
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # --------------------
 # Funciones auxiliares
@@ -21,17 +24,11 @@ def extraer_video_id(url):
     return match.group(1) if match else None
 
 def get_video_title(url):
-    video_id = extraer_video_id(url)
-    if not video_id:
-        return "Título no encontrado"
-
-    # Usar Yewtu.be API
-    api_url = f"https://yewtu.be/api/v1/videos/{video_id}"
     try:
-        r = requests.get(api_url)
-        r.raise_for_status()
-        data = r.json()
-        return data.get("title", "Título no encontrado")
+        ydl_opts = {'quiet': True, 'skip_download': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return info.get('title', 'Título no encontrado')
     except Exception:
         return "Título no encontrado"
 
@@ -55,14 +52,31 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción usando YouTube Transcript API + Yewtu.be + Whisper
+# Sesión de requests con reintentos
+# --------------------
+def requests_session(retries=3, backoff_factor=0.3):
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=(500, 502, 504)
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+# --------------------
+# Obtener transcripción
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     video_id = extraer_video_id(url)
     if not video_id:
         return None
 
-    # Intentar subtítulos oficiales
+    # 1️⃣ Intentar subtítulos oficiales
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=idiomas)
@@ -70,45 +84,30 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         print("Subtítulos oficiales encontrados.")
         return texto
     except Exception:
-        print("No hay subtítulos oficiales, usando Yewtu.be API + Whisper...")
+        print("No hay subtítulos oficiales, usando audio con yt-dlp + Whisper...")
 
-    # Intentar obtener audio desde Yewtu.be
+    # 2️⃣ Obtener URL de audio con yt-dlp
     try:
-        api_url = f"https://yewtu.be/api/v1/streams/{video_id}"
-        r = requests.get(api_url)
-        r.raise_for_status()
-        data = r.json()
-
-        audio_url = None
-        for stream in data.get('adaptiveFormats', []):
-            if stream.get('type', '').startswith('audio'):
-                audio_url = stream.get('url')
-                break
-
-        # Si Yewtu.be no devuelve audio, usar yt-dlp solo para obtener URL
+        ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            audio_url = info.get('url')
         if not audio_url:
-            import yt_dlp
-            ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                audio_url = info.get('url')
-
-        if not audio_url:
-            print("No se pudo obtener el audio")
+            print("No se pudo obtener el audio del video")
             return None
 
-        # Descargar audio a archivo temporal
-        headers = {"User-Agent": "Mozilla/5.0"}
+        # Descargar audio en streaming con requests y reintentos
+        session = requests_session()
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp_audio:
-            with requests.get(audio_url, stream=True, headers=headers) as audio_response:
-                audio_response.raise_for_status()
-                for chunk in audio_response.iter_content(chunk_size=1024*1024):
+            with session.get(audio_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                for chunk in r.iter_content(chunk_size=1024*1024):
                     if chunk:
                         tmp_audio.write(chunk)
                 tmp_audio.flush()
                 tmp_audio.seek(0)
 
-                # Transcribir con Whisper
+                # Transcribir audio con Whisper
                 client_openai = OpenAI()
                 transcription = client_openai.audio.transcriptions.create(
                     file=open(tmp_audio.name, "rb"),
@@ -117,11 +116,11 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         return transcription.text
 
     except Exception as e:
-        print("Error al transcribir audio:", e)
+        print(f"Error al transcribir audio: {e}")
         return None
 
 # --------------------
-# Función para cargar un video
+# Cargar video y generar embeddings
 # --------------------
 @login_required
 def cargar_video_youtube():
@@ -129,27 +128,26 @@ def cargar_video_youtube():
     url = datos['url']
     id_user = current_user.id
 
-    print("URL:", url)
-    print("id_user", id_user)
+    print(f"Procesando video: {url} para usuario {id_user}")
 
-    # Verificar si ya se cargó el video
+    # Verificar si ya se cargó
     if Videos.query.filter_by(idUsuario=id_user, url=url).first():
         return {"error": "El video ya ha sido cargado"}
 
-    print("Cargando transcripción...")
+    # Obtener transcripción
     texto_completo = obtener_transcripcion_youtube(url)
     if not texto_completo:
         return {"error": "No se pudo obtener la transcripción del video"}
 
+    # Obtener título
     titulo = get_video_title(url)
-    print("Título del video:", titulo)
+    print(f"Título del video: {titulo}")
 
-    # Guardar video en DB
+    # Guardar en DB
     video = Videos(titulo=titulo, url=url, idUsuario=id_user)
     db.session.add(video)
     db.session.flush()
     id_video = video.id
-    print("ID del video:", id_video)
 
     # Dividir texto y generar embeddings
     cargar_texto(500, texto_completo, id_user, id_video)
@@ -157,23 +155,22 @@ def cargar_video_youtube():
 
     return {"idVideo": id_video}
 
-# --------------------
-# Guardar texto y embeddings
-# --------------------
 def cargar_texto(chunk_size, contenido_video, id_user, idVideo):
     textos = split_text(contenido_video, chunk_size)
     print("Generando embeddings...")
     for texto in textos:
-        embedding = get_text_embedding(texto)
-        info_linea = InfoVideo(
-            texto=texto,
-            embedding=json.dumps(embedding),
-            idUsuario=id_user,
-            idVideo=idVideo
-        )
-        db.session.add(info_linea)
+        try:
+            embedding = get_text_embedding(texto)
+            info_linea = InfoVideo(
+                texto=texto,
+                embedding=json.dumps(embedding),
+                idUsuario=id_user,
+                idVideo=idVideo
+            )
+            db.session.add(info_linea)
+        except Exception as e:
+            print(f"Error generando embedding para un chunk: {e}")
     db.session.commit()
-    time.sleep(1)
     return "Embeddings generados"
 
 # --------------------
@@ -186,14 +183,18 @@ def obtener_fila(idVideo, id_transaccion):
     return InfoVideo.query.filter(InfoVideo.idVideo == idVideo, InfoVideo.id == id_transaccion).first()
 
 def generar_respuesta(pregunta, texto):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Eres un chatbot que responde preguntas sobre videos basándose en el texto proporcionado."},
-            {"role": "user", "content": f'Pregunta: "{pregunta}"\nContexto: "{texto}"'}
-        ]
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un chatbot que responde preguntas sobre videos basándose en el texto proporcionado."},
+                {"role": "user", "content": f'Pregunta: "{pregunta}"\nContexto: "{texto}"'}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Error generando respuesta GPT: {e}")
+        return "No se pudo generar la respuesta"
 
 def buscar(pregunta, embeddings, idVideo):
     pregunta_embedding = get_text_embedding(pregunta)
@@ -201,8 +202,7 @@ def buscar(pregunta, embeddings, idVideo):
     indices = np.argsort(similitud)[::-1]
     primer_id = obtener_id_transaccion(idVideo)
     fila = obtener_fila(idVideo, primer_id + int(indices[0]))
-    respuesta = generar_respuesta(pregunta, fila.texto)
-    return respuesta
+    return generar_respuesta(pregunta, fila.texto)
 
 @login_required
 def realizar_pregunta():
@@ -230,3 +230,4 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
