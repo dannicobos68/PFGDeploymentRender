@@ -50,16 +50,16 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción con subtítulos o Whisper
+# Obtener transcripción con subtítulos o Whisper usando proxy + cookies
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
-    # Intentar obtener el video_id
+    # Extraer video ID
     match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
     if not match:
         return None
     video_id = match.group(1)
 
-    # Primero intentamos subtítulos (YouTubeTranscriptApi)
+    # Intentar subtítulos oficiales
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=idiomas)
@@ -69,31 +69,31 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     except Exception:
         print("No hay subtítulos oficiales, usando Whisper...")
 
-    # Descargar audio con yt-dlp usando cookies automáticas
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_path = os.path.join(tmpdir, "audio.mp3")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": audio_path,
-            "quiet": True,
-            "cookies_from_browser": "auto",  # <-- cookies detectadas automáticamente
-            "proxy": WEBPROXY,
-        }
-        try:
+    # Transcribir audio con yt-dlp + proxy + cookies automáticas desde navegador
+    try:
+        # Crear archivo temporal para guardar audio
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_path = os.path.join(tmpdir, "audio.mp3")
+
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": audio_path,
+                "quiet": True,
+                "proxy": WEBPROXY,
+                "cookies_from_browser": ("chrome",),  # Extrae cookies automáticamente de Chrome (funciona también con Edge)
+                "extractor_args": {"youtube": {"player_client": "default"}}
+            }
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-        except Exception as e:
-            print("Error al descargar audio con cookies del navegador:", e)
-            return None
 
-        # Convertir a mp3 si fuera necesario
-        if not audio_path.endswith(".mp3"):
-            audio_mp3 = audio_path.replace(".webm", ".mp3")
-            subprocess.run(["ffmpeg", "-i", audio_path, audio_mp3], check=True)
-            audio_path = audio_mp3
+            # Convertir a mp3 si es necesario
+            if not audio_path.endswith(".mp3"):
+                audio_mp3 = audio_path.replace(".webm", ".mp3")
+                subprocess.run(["ffmpeg", "-i", audio_path, audio_mp3], check=True)
+                audio_path = audio_mp3
 
-        # Transcribir con Whisper
-        try:
+            # Transcribir audio con Whisper
             from openai import OpenAI
             client_openai = OpenAI()
             with open(audio_path, "rb") as f:
@@ -102,9 +102,9 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
                     model="whisper-1"
                 )
             return transcription.text
-        except Exception as e:
-            print("Error al transcribir audio con Whisper:", e)
-            return None
+    except Exception as e:
+        print("Error al transcribir audio con Whisper:", e)
+        return None
 
 # --------------------
 # Función para cargar un video
@@ -151,7 +151,7 @@ def cargar_video_youtube():
 def cargar_texto(chunk_size, contenido_video, id_user, idVideo):
     textos = split_text(contenido_video, chunk_size)
     print("Generando embeddings...")
-    for i, texto in enumerate(textos):
+    for texto in textos:
         embedding = get_text_embedding(texto)
         embedding_str = json.dumps(embedding)
         info_linea = InfoVideo(
@@ -221,6 +221,7 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
 
 
 
