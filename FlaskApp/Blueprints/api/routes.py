@@ -202,6 +202,26 @@ def realizar_pregunta():
 
     videos_json = InfoVideo.query.with_entities(InfoVideo.embedding).filter(
         InfoVideo.idUsuario == id_usuario,
+        InfoVideo.idVideo == idVideo
+    ).all()
+
+    embeddings = [json.loads(v.embedding) for v in videos_json]
+
+    respuesta = buscar(pregunta, embeddings, idVideo)
+
+    # Guardar la pregunta y respuesta
+    llamada = Llamada(
+        idUsuario=id_usuario,
+        idVideo=idVideo,
+        pregunta=pregunta,
+        respuesta=respuesta,
+        fecha=datetime.now()
+    )
+    db.session.add(llamada)
+    db.session.commit()
+
+    return {"respuesta": respuesta}
+
 
 
 
