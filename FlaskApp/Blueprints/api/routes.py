@@ -16,7 +16,7 @@ from FlaskApp.database import db, InfoVideo, Videos, Llamada
 # --------------------
 # Configuración de proxy
 # --------------------
-WEBPROXY = "http://haxruvue-1:c159jygnowyp@p.webshare.io:80/"
+WEBPROXY = "http://haxruvue-ES-1:c159jygnowyp@p.webshare.io:80/"
 
 # --------------------
 # Funciones auxiliares
