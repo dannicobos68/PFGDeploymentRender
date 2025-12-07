@@ -33,16 +33,17 @@ def get_text_embedding(text):
     ).data[0].embedding
     return embedding
 
-def split_text(content, chunk_size):
-    chunks = []
-    start = 0
-    while start < len(content):
-        end = start + chunk_size
-        if end < len(content):
-            while end < len(content) and content[end] != ".":
-                end += 1
-        chunks.append(content[start:end+1])
-        start = end + 1
+def split_text(content, chunk_size=500):
+    sentences = re.split(r'(?<=[.?!])\s+', content)
+    chunks, current = [], ""
+    for s in sentences:
+        if len(current) + len(s) <= chunk_size:
+            current += s + " "
+        else:
+            chunks.append(current.strip())
+            current = s + " "
+    if current:
+        chunks.append(current.strip())
     return chunks
 
 def calculate_cosine_similarity(vector1, vector2):
@@ -68,42 +69,20 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     except Exception:
         print("No hay subtítulos oficiales, usando Whisper...")
 
-    # Descargar audio con yt-dlp usando proxy
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_path = os.path.join(tmpdir, "audio.mp3")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": audio_path,
-            "quiet": True,
-            "proxy": WEBPROXY,
-            "extractor_args": {"youtube": {"player_client": "default"}}
-        }
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-        except Exception as e:
-            print("Error al descargar audio:", e)
-            return None
-
-        # Convertir a mp3 si es necesario
-        if not audio_path.endswith(".mp3"):
-            audio_mp3 = audio_path.replace(".webm", ".mp3")
-            subprocess.run(["ffmpeg", "-i", audio_path, audio_mp3], check=True)
-            audio_path = audio_mp3
-
-        # Transcribir con Whisper
-        try:
-            from openai import OpenAI
-            client_openai = OpenAI()  # Si usas otro cliente, reemplazar
-            with open(audio_path, "rb") as f:
-                transcription = client_openai.audio.transcriptions.create(
-                    file=f,
-                    model="whisper-1"
-                )
-            return transcription.text
-        except Exception as e:
-            print("Error al transcribir audio con Whisper:", e)
-            return None
+    # Transcribir audio con streaming a Whisper
+    try:
+        command = ["yt-dlp", "-f", "bestaudio", "-o", "-", url]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        from openai import OpenAI
+        client_openai = OpenAI()
+        transcription = client_openai.audio.transcriptions.create(
+            file=process.stdout,
+            model="whisper-1"
+        )
+        return transcription.text
+    except Exception as e:
+        print("Error al transcribir audio con Whisper:", e)
+        return None
 
 # --------------------
 # Función para cargar un video
@@ -139,8 +118,8 @@ def cargar_video_youtube():
     print("ID del video:", id_video)
 
     # Dividir texto y generar embeddings
-    datafrme = cargar_texto(500, texto_completo, id_user, id_video)
-    print("Embeddings generados:", datafrme)
+    cargar_texto(500, texto_completo, id_user, id_video)
+    print("Embeddings generados.")
 
     return {"idVideo": id_video}
 
@@ -220,4 +199,5 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
 
