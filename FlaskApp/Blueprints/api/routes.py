@@ -24,13 +24,15 @@ def get_video_title(url):
     video_id = extraer_video_id(url)
     if not video_id:
         return "Título no encontrado"
-    api_url = f"https://piped.kavin.rocks/api/v1/videos/{video_id}"
+
+    # Usar Invidious API
+    api_url = f"https://invidious.snopyta.org/api/v1/videos/{video_id}"
     try:
         r = requests.get(api_url)
         r.raise_for_status()
         data = r.json()
         return data.get("title", "Título no encontrado")
-    except:
+    except Exception:
         return "Título no encontrado"
 
 def get_text_embedding(text):
@@ -53,7 +55,7 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción usando Piped + Whisper
+# Obtener transcripción usando YouTube Transcript API + Invidious + Whisper
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     video_id = extraer_video_id(url)
@@ -68,26 +70,35 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         print("Subtítulos oficiales encontrados.")
         return texto
     except Exception:
-        print("No hay subtítulos oficiales, usando Piped API + Whisper...")
+        print("No hay subtítulos oficiales, usando Invidious API + Whisper...")
 
-    # Obtener audio stream desde Piped API
+    # Intentar obtener audio desde Invidious
     try:
-        api_url = f"https://piped.kavin.rocks/api/v1/streams/{video_id}"
+        api_url = f"https://invidious.snopyta.org/api/v1/streams/{video_id}"
         r = requests.get(api_url)
         r.raise_for_status()
         data = r.json()
 
         audio_url = None
-        for stream in data.get('adaptiveStreams', []):
-            if stream.get('type') == 'audio':
+        for stream in data.get('adaptiveFormats', []):
+            if stream.get('type', '').startswith('audio'):
                 audio_url = stream.get('url')
                 break
+
+        # Si Invidious no devuelve audio, usar yt-dlp solo para obtener URL
         if not audio_url:
-            print("No se encontró stream de audio")
+            import yt_dlp
+            ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                audio_url = info.get('url')
+
+        if not audio_url:
+            print("No se pudo obtener el audio")
             return None
 
         # Descargar audio a archivo temporal
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp_audio:
             with requests.get(audio_url, stream=True, headers=headers) as audio_response:
                 audio_response.raise_for_status()
@@ -106,7 +117,7 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         return transcription.text
 
     except Exception as e:
-        print("Error al transcribir audio con Piped + Whisper:", e)
+        print("Error al transcribir audio:", e)
         return None
 
 # --------------------
@@ -219,5 +230,3 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
-
-
