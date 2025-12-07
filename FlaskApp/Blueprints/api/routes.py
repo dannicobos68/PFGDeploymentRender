@@ -2,9 +2,8 @@ import os
 import re
 import json
 import time
-import yt_dlp
-import tempfile
-import subprocess
+import requests
+import io
 import numpy as np
 from flask import request
 from flask_login import current_user, login_required
@@ -14,18 +13,24 @@ from FlaskApp.core import client
 from FlaskApp.database import db, InfoVideo, Videos, Llamada
 
 # --------------------
-# Configuración de proxy
-# --------------------
-WEBPROXY = "http://haxruvue-ES-1:c159jygnowyp@p.webshare.io:80/"
-
-# --------------------
 # Funciones auxiliares
 # --------------------
 def get_video_title(url):
-    ydl_opts = {"quiet": True, "proxy": WEBPROXY}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get("title", "Título no encontrado")
+    video_id = extraer_video_id(url)
+    if not video_id:
+        return "Título no encontrado"
+    api_url = f"https://piped.kavin.rocks/api/v1/videos/{video_id}"
+    r = requests.get(api_url)
+    if r.status_code != 200:
+        return "Título no encontrado"
+    data = r.json()
+    return data.get("title", "Título no encontrado")
+
+def extraer_video_id(url):
+    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    if not match:
+        return None
+    return match.group(1)
 
 def get_text_embedding(text):
     embedding = client.embeddings.create(
@@ -50,14 +55,12 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción con subtítulos o Whisper usando solo proxy
+# Obtener transcripción con Piped API + Whisper (streaming)
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
-    # Extraer video ID
-    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
-    if not match:
+    video_id = extraer_video_id(url)
+    if not video_id:
         return None
-    video_id = match.group(1)
 
     # Intentar subtítulos oficiales
     try:
@@ -67,40 +70,46 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         print("Subtítulos oficiales encontrados.")
         return texto
     except Exception:
-        print("No hay subtítulos oficiales, usando Whisper...")
+        print("No hay subtítulos oficiales, usando Piped API + Whisper...")
 
-    # Transcribir audio con yt-dlp + proxy
+    # Obtener audio stream desde Piped API
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            audio_path = os.path.join(tmpdir, "audio.mp3")
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": audio_path,
-                "quiet": True,
-                "proxy": WEBPROXY,
-                "extractor_args": {"youtube": {"player_client": "default"}}
-            }
+        api_url = f"https://piped.kavin.rocks/api/v1/streams/{video_id}"
+        r = requests.get(api_url)
+        if r.status_code != 200:
+            print("Error al obtener streams de Piped API")
+            return None
+        data = r.json()
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+        # Tomar primer stream de audio disponible
+        audio_url = None
+        for stream in data.get('adaptiveStreams', []):
+            if stream.get('type') == 'audio':
+                audio_url = stream['url']
+                break
+        if not audio_url:
+            print("No se encontró stream de audio")
+            return None
 
-            # Convertir a mp3 si es necesario
-            if not audio_path.endswith(".mp3"):
-                audio_mp3 = audio_path.replace(".webm", ".mp3")
-                subprocess.run(["ffmpeg", "-i", audio_path, audio_mp3], check=True)
-                audio_path = audio_mp3
+        # Descargar audio a memoria
+        audio_response = requests.get(audio_url, stream=True)
+        audio_bytes = io.BytesIO()
+        for chunk in audio_response.iter_content(chunk_size=1024*1024):
+            if chunk:
+                audio_bytes.write(chunk)
+        audio_bytes.seek(0)
 
-            # Transcribir audio con Whisper
-            from openai import OpenAI
-            client_openai = OpenAI()
-            with open(audio_path, "rb") as f:
-                transcription = client_openai.audio.transcriptions.create(
-                    file=f,
-                    model="whisper-1"
-                )
-            return transcription.text
+        # Transcribir directamente desde memoria con Whisper
+        from openai import OpenAI
+        client_openai = OpenAI()
+        transcription = client_openai.audio.transcriptions.create(
+            file=audio_bytes,
+            model="whisper-1"
+        )
+        return transcription.text
+
     except Exception as e:
-        print("Error al transcribir audio con Whisper:", e)
+        print("Error al transcribir audio con Piped API + Whisper:", e)
         return None
 
 # --------------------
@@ -218,3 +227,4 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
