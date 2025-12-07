@@ -17,15 +17,30 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
 # --------------------
+# Proxy global
+# --------------------
+PROXY_URL = "http://haxruvue-ES-1:c159jygnowyp@p.webshare.io:80/"
+
+# --------------------
 # Funciones auxiliares
 # --------------------
 def extraer_video_id(url):
     match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1)
+    # Fallback con yt-dlp + proxy
+    try:
+        ydl_opts = {'quiet': True, 'skip_download': True, 'proxy': PROXY_URL}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return info.get('id')
+    except Exception as e:
+        print(f"Error al extraer video ID con proxy: {e}")
+        return None
 
 def get_video_title(url):
     try:
-        ydl_opts = {'quiet': True, 'skip_download': True}
+        ydl_opts = {'quiet': True, 'skip_download': True, 'proxy': PROXY_URL}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return info.get('title', 'Título no encontrado')
@@ -52,7 +67,7 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Sesión de requests con reintentos
+# Requests con reintentos y proxy
 # --------------------
 def requests_session(retries=3, backoff_factor=0.3):
     session = requests.Session()
@@ -66,40 +81,35 @@ def requests_session(retries=3, backoff_factor=0.3):
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+    session.proxies = {"http": PROXY_URL, "https": PROXY_URL}
     return session
 
 # --------------------
-# Obtener transcripción
+# Obtener transcripción usando yt-dlp + Whisper
 # --------------------
-def obtener_transcripcion_youtube(url, idiomas=['es','en']):
+def obtener_transcripcion_youtube(url):
     video_id = extraer_video_id(url)
     if not video_id:
         return None
 
-    # 1️⃣ Intentar subtítulos oficiales
+    # Obtener URL de audio con yt-dlp + proxy
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=idiomas)
-        texto = " ".join([t['text'] for t in transcript_list])
-        print("Subtítulos oficiales encontrados.")
-        return texto
-    except Exception:
-        print("No hay subtítulos oficiales, usando audio con yt-dlp + Whisper...")
-
-    # 2️⃣ Obtener URL de audio con yt-dlp
-    try:
-        ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True}
+        ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True, 'proxy': PROXY_URL}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             audio_url = info.get('url')
         if not audio_url:
             print("No se pudo obtener el audio del video")
             return None
+    except Exception as e:
+        print(f"Error al extraer audio con proxy: {e}")
+        return None
 
-        # Descargar audio en streaming con requests y reintentos
+    # Descargar audio con requests + proxy
+    try:
         session = requests_session()
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp_audio:
-            with session.get(audio_url, stream=True, timeout=30) as r:
+            with session.get(audio_url, stream=True, timeout=60) as r:
                 r.raise_for_status()
                 for chunk in r.iter_content(chunk_size=1024*1024):
                     if chunk:
@@ -116,7 +126,7 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         return transcription.text
 
     except Exception as e:
-        print(f"Error al transcribir audio: {e}")
+        print(f"Error al descargar/transcribir audio con proxy: {e}")
         return None
 
 # --------------------
@@ -230,4 +240,3 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
-
