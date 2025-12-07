@@ -25,8 +25,8 @@ def get_video_title(url):
     if not video_id:
         return "Título no encontrado"
 
-    # Usar Invidious API
-    api_url = f"https://invidious.snopyta.org/api/v1/videos/{video_id}"
+    # Usar Yewtu.be API
+    api_url = f"https://yewtu.be/api/v1/videos/{video_id}"
     try:
         r = requests.get(api_url)
         r.raise_for_status()
@@ -55,7 +55,7 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción usando YouTube Transcript API + Invidious + Whisper
+# Obtener transcripción usando YouTube Transcript API + Yewtu.be + Whisper
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     video_id = extraer_video_id(url)
@@ -70,11 +70,11 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
         print("Subtítulos oficiales encontrados.")
         return texto
     except Exception:
-        print("No hay subtítulos oficiales, usando Invidious API + Whisper...")
+        print("No hay subtítulos oficiales, usando Yewtu.be API + Whisper...")
 
-    # Intentar obtener audio desde Invidious
+    # Intentar obtener audio desde Yewtu.be
     try:
-        api_url = f"https://invidious.snopyta.org/api/v1/streams/{video_id}"
+        api_url = f"https://yewtu.be/api/v1/streams/{video_id}"
         r = requests.get(api_url)
         r.raise_for_status()
         data = r.json()
@@ -85,7 +85,7 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
                 audio_url = stream.get('url')
                 break
 
-        # Si Invidious no devuelve audio, usar yt-dlp solo para obtener URL
+        # Si Yewtu.be no devuelve audio, usar yt-dlp solo para obtener URL
         if not audio_url:
             import yt_dlp
             ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'skip_download': True}
