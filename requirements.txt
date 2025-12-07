@@ -15,6 +15,7 @@ Flask-Login
 Flask-Migrate
 Flask-SQLAlchemy
 Flask-WTF
+gunicorn
 greenlet
 html5lib
 httpx
