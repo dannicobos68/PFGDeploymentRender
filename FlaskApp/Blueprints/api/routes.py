@@ -3,7 +3,7 @@ import re
 import json
 import time
 import requests
-import io
+import tempfile
 import numpy as np
 from flask import request
 from flask_login import current_user, login_required
@@ -11,32 +11,30 @@ from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 from FlaskApp.core import client
 from FlaskApp.database import db, InfoVideo, Videos, Llamada
+from openai import OpenAI
 
 # --------------------
 # Funciones auxiliares
 # --------------------
+def extraer_video_id(url):
+    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    return match.group(1) if match else None
+
 def get_video_title(url):
     video_id = extraer_video_id(url)
     if not video_id:
         return "Título no encontrado"
     api_url = f"https://piped.kavin.rocks/api/v1/videos/{video_id}"
-    r = requests.get(api_url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(api_url)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("title", "Título no encontrado")
+    except:
         return "Título no encontrado"
-    data = r.json()
-    return data.get("title", "Título no encontrado")
-
-def extraer_video_id(url):
-    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
-    if not match:
-        return None
-    return match.group(1)
 
 def get_text_embedding(text):
-    embedding = client.embeddings.create(
-        input=text, model="text-embedding-3-small"
-    ).data[0].embedding
-    return embedding
+    return client.embeddings.create(input=text, model="text-embedding-3-small").data[0].embedding
 
 def split_text(content, chunk_size=500):
     sentences = re.split(r'(?<=[.?!])\s+', content)
@@ -55,7 +53,7 @@ def calculate_cosine_similarity(vector1, vector2):
     return cosine_similarity([vector1], [vector2])[0][0]
 
 # --------------------
-# Obtener transcripción con Piped API + Whisper (streaming)
+# Obtener transcripción usando Piped + Whisper
 # --------------------
 def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     video_id = extraer_video_id(url)
@@ -76,40 +74,39 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     try:
         api_url = f"https://piped.kavin.rocks/api/v1/streams/{video_id}"
         r = requests.get(api_url)
-        if r.status_code != 200:
-            print("Error al obtener streams de Piped API")
-            return None
+        r.raise_for_status()
         data = r.json()
 
-        # Tomar primer stream de audio disponible
         audio_url = None
         for stream in data.get('adaptiveStreams', []):
             if stream.get('type') == 'audio':
-                audio_url = stream['url']
+                audio_url = stream.get('url')
                 break
         if not audio_url:
             print("No se encontró stream de audio")
             return None
 
-        # Descargar audio a memoria
-        audio_response = requests.get(audio_url, stream=True)
-        audio_bytes = io.BytesIO()
-        for chunk in audio_response.iter_content(chunk_size=1024*1024):
-            if chunk:
-                audio_bytes.write(chunk)
-        audio_bytes.seek(0)
+        # Descargar audio a archivo temporal
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp_audio:
+            with requests.get(audio_url, stream=True, headers=headers) as audio_response:
+                audio_response.raise_for_status()
+                for chunk in audio_response.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        tmp_audio.write(chunk)
+                tmp_audio.flush()
+                tmp_audio.seek(0)
 
-        # Transcribir directamente desde memoria con Whisper
-        from openai import OpenAI
-        client_openai = OpenAI()
-        transcription = client_openai.audio.transcriptions.create(
-            file=audio_bytes,
-            model="whisper-1"
-        )
+                # Transcribir con Whisper
+                client_openai = OpenAI()
+                transcription = client_openai.audio.transcriptions.create(
+                    file=open(tmp_audio.name, "rb"),
+                    model="whisper-1"
+                )
         return transcription.text
 
     except Exception as e:
-        print("Error al transcribir audio con Piped API + Whisper:", e)
+        print("Error al transcribir audio con Piped + Whisper:", e)
         return None
 
 # --------------------
@@ -125,10 +122,8 @@ def cargar_video_youtube():
     print("id_user", id_user)
 
     # Verificar si ya se cargó el video
-    videos = Videos.query.filter_by(idUsuario=id_user).all()
-    for video in videos:
-        if video.url == url:
-            return {"error": "El video ya ha sido cargado"}
+    if Videos.query.filter_by(idUsuario=id_user, url=url).first():
+        return {"error": "El video ya ha sido cargado"}
 
     print("Cargando transcripción...")
     texto_completo = obtener_transcripcion_youtube(url)
@@ -138,7 +133,7 @@ def cargar_video_youtube():
     titulo = get_video_title(url)
     print("Título del video:", titulo)
 
-    # Guardar video en la base de datos
+    # Guardar video en DB
     video = Videos(titulo=titulo, url=url, idUsuario=id_user)
     db.session.add(video)
     db.session.flush()
@@ -152,17 +147,16 @@ def cargar_video_youtube():
     return {"idVideo": id_video}
 
 # --------------------
-# Guardar texto y embeddings en la DB
+# Guardar texto y embeddings
 # --------------------
 def cargar_texto(chunk_size, contenido_video, id_user, idVideo):
     textos = split_text(contenido_video, chunk_size)
     print("Generando embeddings...")
     for texto in textos:
         embedding = get_text_embedding(texto)
-        embedding_str = json.dumps(embedding)
         info_linea = InfoVideo(
             texto=texto,
-            embedding=embedding_str,
+            embedding=json.dumps(embedding),
             idUsuario=id_user,
             idVideo=idVideo
         )
@@ -172,7 +166,7 @@ def cargar_texto(chunk_size, contenido_video, id_user, idVideo):
     return "Embeddings generados"
 
 # --------------------
-# Funciones para el chat
+# Funciones de chat
 # --------------------
 def obtener_id_transaccion(idVideo):
     return InfoVideo.query.with_entities(InfoVideo.id).filter(InfoVideo.idVideo == idVideo).first()[0]
@@ -206,16 +200,14 @@ def realizar_pregunta():
     idVideo = datos['idVideo']
     id_usuario = current_user.id
 
-    videos_json = InfoVideo.query.with_entities(InfoVideo.embedding).filter(
+    embeddings = [json.loads(v.embedding) for v in InfoVideo.query.with_entities(InfoVideo.embedding).filter(
         InfoVideo.idUsuario == id_usuario,
         InfoVideo.idVideo == idVideo
-    ).all()
-
-    embeddings = [json.loads(v.embedding) for v in videos_json]
+    ).all()]
 
     respuesta = buscar(pregunta, embeddings, idVideo)
 
-    # Guardar la pregunta y respuesta
+    # Guardar pregunta y respuesta
     llamada = Llamada(
         idUsuario=id_usuario,
         idVideo=idVideo,
@@ -227,4 +219,5 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
 
