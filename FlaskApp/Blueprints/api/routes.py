@@ -14,11 +14,15 @@ from FlaskApp.core import client
 from FlaskApp.database import db, InfoVideo, Videos, Llamada
 
 # --------------------
+# Configuración de proxy
+# --------------------
+WEBPROXY = "http://haxruvue-1:c159jygnowyp@p.webshare.io:80/"
+
+# --------------------
 # Funciones auxiliares
 # --------------------
-
 def get_video_title(url):
-    ydl_opts = {"quiet": True}
+    ydl_opts = {"quiet": True, "proxy": WEBPROXY}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         return info.get("title", "Título no encontrado")
@@ -64,13 +68,14 @@ def obtener_transcripcion_youtube(url, idiomas=['es','en']):
     except Exception:
         print("No hay subtítulos oficiales, usando Whisper...")
 
-    # Descargar audio con yt-dlp y convertir a mp3
+    # Descargar audio con yt-dlp usando proxy
     with tempfile.TemporaryDirectory() as tmpdir:
         audio_path = os.path.join(tmpdir, "audio.mp3")
         ydl_opts = {
             "format": "bestaudio/best",
             "outtmpl": audio_path,
             "quiet": True,
+            "proxy": WEBPROXY,
             "extractor_args": {"youtube": {"player_client": "default"}}
         }
         try:
@@ -215,3 +220,4 @@ def realizar_pregunta():
     db.session.commit()
 
     return {"respuesta": respuesta}
+
